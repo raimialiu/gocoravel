@@ -4,6 +4,8 @@ import (
 	"hash/maphash"
 	"reflect"
 	"runtime"
+	"slices"
+	"sync"
 )
 
 func setCapacity(count *int) int {
@@ -60,10 +62,15 @@ func (d *ConcurrentDictionary[K, V]) getHashCode(key K) uint64 {
 	return h.Sum64() & 0x7FFFFFFF
 }
 
-func (d *ConcurrentDictionary[K, V]) bucketIndex(key K) int {
-	hashCode := d.getHashCode(key)
-	bucketIndex := int(hashCode) % len(d._table._buckets)
+func (d *ConcurrentDictionary[K, V]) bucketIndex(key K, hashCode *uint64) int {
+	hashKey := uint64(0)
+	if hashCode == nil {
+		hashKey = d.getHashCode(key)
+	} else {
+		hashKey = *hashCode
+	}
 
+	bucketIndex := int(hashKey) % len(d._table._buckets)
 	return bucketIndex
 }
 
@@ -72,17 +79,50 @@ func (d *ConcurrentDictionary[K, V]) lockIndex(bucketIndex int) int {
 	return lockIndex
 }
 
-func (d *ConcurrentDictionary[K, V]) Get(key K) V {
-	hashCode := d.getHashCode(key)
-	bucketIndex := d.bucketIndex(key)
+func (d *ConcurrentDictionary[K, V]) createLockAt(lockIndex int) *sync.RWMutex {
+	slices.Insert(d._table._locks, lockIndex, sync.RWMutex{})
+	return &d._table._locks[lockIndex]
+}
 
-	node := d._table._buckets[bucketIndex]
+func (d *ConcurrentDictionary[K, V]) acquireLock(lockIndex int) {
+	d._table._locks[lockIndex].Lock()
+}
+
+func (d *ConcurrentDictionary[K, V]) Get(key K) *V {
+	hashCode := new(d.getHashCode(key))
+	bucketIndex := d.bucketIndex(key, hashCode)
+	lockIndex := d.lockIndex(bucketIndex)
+
+	lock := &d._table._locks[lockIndex]
+	if lock == nil {
+		lock = d.createLockAt(bucketIndex)
+	}
+
+	node := &d._table._buckets[bucketIndex]
+	if node == nil || (node != nil && node.Node == nil) {
+		return nil
+	}
 
 	for {
-		
+		if node.HashCode == *hashCode {
+			return &node.Node.Value
+		}
+
 	}
 }
 
-func (d *ConcurrentDictionary[K, V]) Add(key K, value V) {
+func (d *ConcurrentDictionary[K, V]) TryAdd(key K, value V) bool {
+	hashCode := new(d.getHashCode(ke))
+	buckIndex := d.bucketIndex(key, hashCode)
+	lockIndex := d.lockIndex(buckIndex)
 
+	d.acquireLock(lockIndex)
+	keyValue := d.Get(key)
+	if keyValue != nil {
+		return false
+	}
+
+	oldEntry := &d._table._buckets[buckIndex]
+	d._table._buckets[buckIndex] = *NewEntry(key, value, *hashCode, oldEntry)
+	return true
 }
