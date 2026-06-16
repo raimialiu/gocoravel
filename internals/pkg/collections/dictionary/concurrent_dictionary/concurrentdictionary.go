@@ -1,43 +1,28 @@
 package concurrent_dictionary
 
 import (
+	"fmt"
 	"hash/maphash"
-	"reflect"
-	"runtime"
 	"slices"
 	"sync"
 )
-
-func setCapacity(count *int) int {
-	capacity := 0
-	if count == nil {
-		capacity = DEFAULT_CAPACITY
-	} else {
-		capacity = *count
-	}
-
-	return capacity
-}
-
-func setConcurrencyLevel(level *int) int {
-	concurrencyLevel := 0
-	if level != nil {
-		concurrencyLevel = *level
-	} else {
-		concurrencyLevel = runtime.NumCPU()
-	}
-
-	return concurrencyLevel
-}
 
 func NewConcurrentDictionary[K, V any](
 	concurrentLevel *int,
 	capacity *int,
 ) *ConcurrentDictionary[K, V] {
-	maxCapacity := setCapacity(capacity)
-	numberOfLocks := setConcurrencyLevel(concurrentLevel)
+	maxCapacity := SetCapacity(capacity)
+	numberOfLocks := SetConcurrencyLevel(concurrentLevel)
 
 	var fixedSeed = maphash.MakeSeed()
+
+	if !IsPrime(maxCapacity) {
+		panic("Max capacity not prime")
+	}
+
+	if numberOfLocks > maxCapacity {
+		panic("too many locks")
+	}
 
 	return &ConcurrentDictionary[K, V]{
 		_hashSeed:        fixedSeed,
@@ -48,15 +33,19 @@ func NewConcurrentDictionary[K, V any](
 }
 
 func (d *ConcurrentDictionary[K, V]) getHashCode(key K) uint64 {
-	var keyReflect = reflect.ValueOf(key)
-	actualValue := keyReflect.Interface()
-
-	hashKey := actualValue.(string)
 	var h maphash.Hash
 	h.SetSeed(d._hashSeed)
-	_, err := h.WriteString(hashKey)
-	if err != nil {
-		panic(err)
+
+	switch v := any(key).(type) {
+	case string:
+		_, _ = h.WriteString(v)
+	case []byte:
+		_, _ = h.Write(v)
+	case fmt.Stringer:
+		_, _ = h.WriteString(v.String())
+	default:
+		stringValue := fmt.Sprintf("%v", v)
+		_, _ = h.WriteString(stringValue)
 	}
 
 	return h.Sum64() & 0x7FFFFFFF
@@ -80,49 +69,65 @@ func (d *ConcurrentDictionary[K, V]) lockIndex(bucketIndex int) int {
 }
 
 func (d *ConcurrentDictionary[K, V]) createLockAt(lockIndex int) *sync.RWMutex {
+	if &d._table._locks[lockIndex] != nil {
+		return &d._table._locks[lockIndex]
+	}
 	slices.Insert(d._table._locks, lockIndex, sync.RWMutex{})
 	return &d._table._locks[lockIndex]
 }
 
 func (d *ConcurrentDictionary[K, V]) acquireLock(lockIndex int) {
+	d.createLockAt(lockIndex)
 	d._table._locks[lockIndex].Lock()
 }
 
-func (d *ConcurrentDictionary[K, V]) Get(key K) *V {
-	hashCode := new(d.getHashCode(key))
-	bucketIndex := d.bucketIndex(key, hashCode)
-	lockIndex := d.lockIndex(bucketIndex)
+func (d *ConcurrentDictionary[K, V]) releaseLock(lockIndex int) {
+	d._table._locks[lockIndex].Unlock()
+}
 
-	lock := &d._table._locks[lockIndex]
-	if lock == nil {
-		lock = d.createLockAt(bucketIndex)
-	}
+func (d *ConcurrentDictionary[K, V]) TryGet(key K) (bool, *V) {
+	value := d.Get(key)
+	return value != nil, value
+}
+
+func (d *ConcurrentDictionary[K, V]) LoadFactor(lockIndex int) *V {
+	d._table._lockCount[lockIndex]
+}
+
+func (d *ConcurrentDictionary[K, V]) Get(key K) *V {
+	hashCode := d.getHashCode(key)
+	bucketIndex := d.bucketIndex(key, &hashCode)
 
 	node := &d._table._buckets[bucketIndex]
-	if node == nil || (node != nil && node.Node == nil) {
-		return nil
-	}
-
 	for {
-		if node.HashCode == *hashCode {
-			return &node.Node.Value
+		if node == nil || (node != nil && node.Node == nil) {
+			return nil
 		}
 
+		if node.HashCode == hashCode {
+			if ValueOf(node.Key) == ValueOf(key) {
+				return &node.Node.Value
+			}
+		}
+
+		node = node.Next
 	}
 }
 
 func (d *ConcurrentDictionary[K, V]) TryAdd(key K, value V) bool {
-	hashCode := new(d.getHashCode(ke))
-	buckIndex := d.bucketIndex(key, hashCode)
+	hashCode := d.getHashCode(key)
+	buckIndex := d.bucketIndex(key, &hashCode)
 	lockIndex := d.lockIndex(buckIndex)
 
 	d.acquireLock(lockIndex)
+	defer d.releaseLock(lockIndex)
 	keyValue := d.Get(key)
 	if keyValue != nil {
 		return false
 	}
 
 	oldEntry := &d._table._buckets[buckIndex]
-	d._table._buckets[buckIndex] = *NewEntry(key, value, *hashCode, oldEntry)
+	d._table._buckets[buckIndex] = *NewEntry(key, value, hashCode, oldEntry)
+	d._table._lockCount[lockIndex]++
 	return true
 }

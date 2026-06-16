@@ -12,9 +12,18 @@ type (
 		_lockCount []uint
 	}
 
-	Node[T any] struct {
-		Value T
+	Node[K, V any] struct {
+		Key      K
+		Value    V
+		HashCode uint64
+		Next     *Node[K, V]
 	} // will come back to this
+
+	Shard[K, V any] struct {
+		Buckets []Node[K, V]
+		Locks   []sync.RWMutex
+		Count   int
+	}
 
 	Entry[K, V any] struct {
 		Key      K

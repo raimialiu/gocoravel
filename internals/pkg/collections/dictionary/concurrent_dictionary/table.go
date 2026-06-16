@@ -10,7 +10,7 @@ func CreateNewTable[K, V any](
 ) *Table[K, V] {
 	buckets := make([]Entry[K, V], capacity)
 	locks := make([]sync.RWMutex, concurrencyLevel)
-	lockCount := make([]uint, 0)
+	lockCount := make([]uint, concurrencyLevel)
 
 	return &Table[K, V]{
 		_buckets:   buckets,
