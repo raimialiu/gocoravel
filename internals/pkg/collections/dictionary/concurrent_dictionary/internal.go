@@ -3,7 +3,12 @@ package concurrent_dictionary
 func (d ConcurrentDictionary[K, V]) _getInternal(key K, hashCode uint64, bucketIndex int) *V {
 	node := &d._table._buckets[bucketIndex]
 
+	var zero K
 	for node != nil {
+		if node.HashCode == 0 && node.Key == zero {
+			break
+		}
+
 		if node.HashCode == hashCode {
 			if ValueOf(node.Key) == ValueOf(key) {
 				return &node.Node.Value
@@ -13,6 +18,11 @@ func (d ConcurrentDictionary[K, V]) _getInternal(key K, hashCode uint64, bucketI
 	}
 
 	return nil
+}
+
+func isZero[T comparable](v T) bool {
+	var zero T
+	return v == zero
 }
 
 func (d ConcurrentDictionary[K, V]) _remove(key K, bi, li int) bool {

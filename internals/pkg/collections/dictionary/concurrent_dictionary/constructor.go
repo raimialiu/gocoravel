@@ -3,15 +3,24 @@ package concurrent_dictionary
 import (
 	"hash/maphash"
 	"sync"
+
+	"github.com/raimialiu/gostream/stream"
 )
 
 func New[K, V any](options ...DictionaryOpt) *ConcurrentDictionary[K, V] {
 	opts := DefaultConfig()
-	for _, opt := range options {
-		opt(&opts)
+
+	optionList := stream.From(options).
+		Filter(func(opt DictionaryOpt) bool { return opt != nil }).
+		ToList()
+
+	for _, opt := range optionList {
+		if opt != nil {
+			opt(&opts)
+		}
 	}
 
-	if opts.concurrency > opts.concurrency {
+	if opts.concurrency > opts.capacity {
 		panic("too many locks")
 	}
 
