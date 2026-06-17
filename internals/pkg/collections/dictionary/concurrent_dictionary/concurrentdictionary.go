@@ -7,31 +7,6 @@ import (
 	"sync"
 )
 
-func NewConcurrentDictionary[K, V any](
-	concurrentLevel *int,
-	capacity *int,
-) *ConcurrentDictionary[K, V] {
-	maxCapacity := SetCapacity(capacity)
-	numberOfLocks := SetConcurrencyLevel(concurrentLevel)
-
-	var fixedSeed = maphash.MakeSeed()
-
-	if !IsPrime(maxCapacity) {
-		panic("Max capacity not prime")
-	}
-
-	if numberOfLocks > maxCapacity {
-		panic("too many locks")
-	}
-
-	return &ConcurrentDictionary[K, V]{
-		_hashSeed:        fixedSeed,
-		_concurrentLevel: numberOfLocks,
-		_capacity:        maxCapacity,
-		_table:           CreateNewTable[K, V](maxCapacity, numberOfLocks),
-	}
-}
-
 func (d *ConcurrentDictionary[K, V]) getHashCode(key K) uint64 {
 	var h maphash.Hash
 	h.SetSeed(d._hashSeed)
@@ -90,27 +65,74 @@ func (d *ConcurrentDictionary[K, V]) TryGet(key K) (bool, *V) {
 	return value != nil, value
 }
 
-func (d *ConcurrentDictionary[K, V]) LoadFactor(lockIndex int) *V {
-	d._table._lockCount[lockIndex]
-}
-
 func (d *ConcurrentDictionary[K, V]) Get(key K) *V {
 	hashCode := d.getHashCode(key)
 	bucketIndex := d.bucketIndex(key, &hashCode)
 
-	node := &d._table._buckets[bucketIndex]
-	for {
-		if node == nil || (node != nil && node.Node == nil) {
-			return nil
-		}
+	return d._getInternal(key, hashCode, bucketIndex)
+}
 
-		if node.HashCode == hashCode {
-			if ValueOf(node.Key) == ValueOf(key) {
-				return &node.Node.Value
-			}
-		}
+func (d *ConcurrentDictionary[K, V]) GetOrDefault(key K, defaultValue V) *V {
+	found, value := d.TryGet(key)
+	if found {
+		return value
+	}
 
-		node = node.Next
+	return &defaultValue
+}
+
+func (d *ConcurrentDictionary[K, V]) TryRemove(key K) bool {
+	hashCode := d.getHashCode(key)
+	bi := d.bucketIndex(key, &hashCode)
+	li := d.lockIndex(bi)
+
+	return d._remove(key, bi, li)
+}
+
+func (d *ConcurrentDictionary[K, V]) Count() int {
+	count := 0
+	for i := 0; i < len(d._table._locks); i++ {
+		d.acquireLock(i)
+	}
+
+	for i := 0; i < len(d._table._lockCount); i++ {
+		current := d._table._lockCount[i]
+		count += int(current)
+	}
+
+	for i := 0; i < len(d._table._locks); i++ {
+		d.releaseLock(i)
+	}
+
+	return count
+}
+
+func (d *ConcurrentDictionary[K, V]) resize() {
+	for i := 0; i < len(d._table._locks)-1; i++ {
+		d.acquireLock(i)
+	}
+
+	table := CreateNewTable[K, V](NextPrime(d._capacity*2), d._concurrentLevel)
+
+	for i := 0; i < len(d._table._buckets)-1; i++ {
+		node := &d._table._buckets[i]
+
+		for node != nil {
+			nextNode := node.Next
+			newBucketIndex := node.HashCode % uint64(len(table._buckets))
+			node.Next = &table._buckets[newBucketIndex]
+			table._buckets[newBucketIndex] = *node
+
+			newLockIndex := newBucketIndex % uint64(len(table._locks))
+			table._lockCount[newLockIndex]++
+			node = nextNode
+
+		}
+	}
+
+	d._table = table
+	for i := 0; i < len(d._table._locks)-1; i++ {
+		d.releaseLock(i)
 	}
 }
 
@@ -129,5 +151,11 @@ func (d *ConcurrentDictionary[K, V]) TryAdd(key K, value V) bool {
 	oldEntry := &d._table._buckets[buckIndex]
 	d._table._buckets[buckIndex] = *NewEntry(key, value, hashCode, oldEntry)
 	d._table._lockCount[lockIndex]++
+
+	needFactorIndex := (float64(len(d._table._buckets))) / (float64(d._concurrentLevel) * d._loadFactor)
+	if float64(d._table._lockCount[lockIndex]) > needFactorIndex {
+		d.resize()
+	}
+
 	return true
 }

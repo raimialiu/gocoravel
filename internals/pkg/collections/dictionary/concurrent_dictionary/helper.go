@@ -35,6 +35,16 @@ func SetConcurrencyLevel(level *int) int {
 	return concurrencyLevel
 }
 
+func NextPrime(value int) int {
+	isPrime := IsPrime(value)
+	for !isPrime {
+		value = value + 1
+		isPrime = IsPrime(value)
+	}
+
+	return value
+}
+
 func IsPrime(n int) bool {
 	// Numbers less than 2 are not prime
 	if n < 2 {
