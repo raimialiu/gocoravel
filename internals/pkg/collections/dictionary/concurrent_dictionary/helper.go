@@ -3,7 +3,6 @@ package concurrent_dictionary
 import (
 	"math"
 	"reflect"
-	"runtime"
 )
 
 func ValueOf[K any](data K) interface{} {
@@ -11,28 +10,6 @@ func ValueOf[K any](data K) interface{} {
 	actualValue := keyReflect.Interface()
 
 	return actualValue.(interface{})
-}
-
-func SetCapacity(count *int) int {
-	capacity := 0
-	if count == nil {
-		capacity = DEFAULT_CAPACITY
-	} else {
-		capacity = *count
-	}
-
-	return capacity
-}
-
-func SetConcurrencyLevel(level *int) int {
-	concurrencyLevel := 0
-	if level != nil {
-		concurrencyLevel = *level
-	} else {
-		concurrencyLevel = runtime.NumCPU()
-	}
-
-	return concurrencyLevel
 }
 
 func NextPrime(value int) int {

@@ -60,51 +60,12 @@ func (d *ConcurrentDictionary[K, V]) releaseLock(lockIndex int) {
 	d._table._locks[lockIndex].Unlock()
 }
 
-func (d *ConcurrentDictionary[K, V]) TryGet(key K) (bool, *V) {
-	value := d.Get(key)
-	return value != nil, value
-}
-
-func (d *ConcurrentDictionary[K, V]) Get(key K) *V {
-	hashCode := d.getHashCode(key)
-	bucketIndex := d.bucketIndex(key, &hashCode)
-
-	return d._getInternal(key, hashCode, bucketIndex)
-}
-
-func (d *ConcurrentDictionary[K, V]) GetOrDefault(key K, defaultValue V) *V {
-	found, value := d.TryGet(key)
-	if found {
-		return value
-	}
-
-	return &defaultValue
-}
-
 func (d *ConcurrentDictionary[K, V]) TryRemove(key K) bool {
 	hashCode := d.getHashCode(key)
 	bi := d.bucketIndex(key, &hashCode)
 	li := d.lockIndex(bi)
 
 	return d._remove(key, bi, li)
-}
-
-func (d *ConcurrentDictionary[K, V]) Count() int {
-	count := 0
-	for i := 0; i < len(d._table._locks); i++ {
-		d.acquireLock(i)
-	}
-
-	for i := 0; i < len(d._table._lockCount); i++ {
-		current := d._table._lockCount[i]
-		count += int(current)
-	}
-
-	for i := 0; i < len(d._table._locks); i++ {
-		d.releaseLock(i)
-	}
-
-	return count
 }
 
 func (d *ConcurrentDictionary[K, V]) resize() {
@@ -134,29 +95,4 @@ func (d *ConcurrentDictionary[K, V]) resize() {
 	for i := 0; i < len(d._table._locks)-1; i++ {
 		d.releaseLock(i)
 	}
-}
-
-func (d *ConcurrentDictionary[K, V]) TryAdd(key K, value V) bool {
-	hashCode := d.getHashCode(key)
-	buckIndex := d.bucketIndex(key, &hashCode)
-	lockIndex := d.lockIndex(buckIndex)
-
-	d.acquireLock(lockIndex)
-	defer d.releaseLock(lockIndex)
-	keyValue := d.Get(key)
-	if keyValue != nil {
-		return false
-	}
-
-	oldEntryCopy := new(Entry[K, V])
-	*oldEntryCopy = d._table._buckets[buckIndex]
-	d._table._buckets[buckIndex] = *NewEntry(key, value, hashCode, oldEntryCopy)
-	d._table._lockCount[lockIndex]++
-
-	needFactorIndex := (float64(len(d._table._buckets))) / (float64(d._concurrentLevel) * d._loadFactor)
-	if float64(d._table._lockCount[lockIndex]) > needFactorIndex {
-		d.resize()
-	}
-
-	return true
 }
