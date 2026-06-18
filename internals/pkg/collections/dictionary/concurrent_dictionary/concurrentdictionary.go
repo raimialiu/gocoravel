@@ -148,8 +148,9 @@ func (d *ConcurrentDictionary[K, V]) TryAdd(key K, value V) bool {
 		return false
 	}
 
-	oldEntry := &d._table._buckets[buckIndex]
-	d._table._buckets[buckIndex] = *NewEntry(key, value, hashCode, oldEntry)
+	oldEntryCopy := new(Entry[K, V])
+	*oldEntryCopy = d._table._buckets[buckIndex]
+	d._table._buckets[buckIndex] = *NewEntry(key, value, hashCode, oldEntryCopy)
 	d._table._lockCount[lockIndex]++
 
 	needFactorIndex := (float64(len(d._table._buckets))) / (float64(d._concurrentLevel) * d._loadFactor)

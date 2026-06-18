@@ -17,5 +17,5 @@ func main() {
 	fmt.Println(*dict.Get(4))
 	deleted := dict.TryRemove(3)
 	fmt.Println(deleted)
-	fmt.Println(*dict.Get(4))
+	fmt.Println(*dict.Get(3))
 }

@@ -5,7 +5,7 @@ func (d ConcurrentDictionary[K, V]) _getInternal(key K, hashCode uint64, bucketI
 
 	var zero K
 	for node != nil {
-		if node.HashCode == 0 && node.Key == zero {
+		if node.HashCode == 0 && ValueOf(node.Key) == ValueOf(zero) {
 			break
 		}
 
@@ -20,37 +20,38 @@ func (d ConcurrentDictionary[K, V]) _getInternal(key K, hashCode uint64, bucketI
 	return nil
 }
 
-func isZero[T comparable](v T) bool {
-	var zero T
-	return v == zero
-}
-
 func (d ConcurrentDictionary[K, V]) _remove(key K, bi, li int) bool {
 	d.acquireLock(li)
 	defer d.releaseLock(li)
 	node := &d._table._buckets[bi]
 	h := d.getHashCode(key)
 
+	result := false
+
 	// 42
 	// 42 = 3 -> 4 -> 2 -> nil
 	// 42 = 3 -> nil
 	// 42 = nil
-	previous := node  // 3
-	for node != nil { // 4
+	previous := new(Entry[K, V]) // 3
+	for node != nil {            // 4
 		if node.HashCode == h && ValueOf(node.Key) == ValueOf(key) { // 4
 			nextNode := node.Next // 2
-			if previous != nil {
+			if previous != nil && previous.Node != nil {
 				previous.Next = nextNode
-				return true
+				result = true
+				break
 			}
 
 			// 4
-			if nextNode != nil { // 3
+			if nextNode != nil && nextNode.Node != nil { // 3
 				node = nextNode
 				d._table._buckets[bi] = *node
+				result = true
+				break
 			} else {
-				node = nil
-				d._table._buckets[bi] = *node
+				d._table._buckets[bi] = *new(Entry[K, V])
+				result = true
+				break
 			}
 
 		}
@@ -59,5 +60,5 @@ func (d ConcurrentDictionary[K, V]) _remove(key K, bi, li int) bool {
 		node = node.Next // 2
 	}
 
-	return false
+	return result
 }
