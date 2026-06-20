@@ -96,3 +96,20 @@ func (d *ConcurrentDictionary[K, V]) resize() {
 		d.releaseLock(i)
 	}
 }
+
+func (d *ConcurrentDictionary[K, V]) ToMap() map[interface{}]V {
+	result := make(map[interface{}]V)
+
+	d._acquireAllLocks()
+	defer d._releaseAllLocks()
+
+	for i := 0; i < len(d._table._buckets); i++ {
+		node := &d._table._buckets[i]
+		for node != nil && node.Node != nil {
+			result[node.Key] = node.Node.Value
+			node = node.Next
+		}
+	}
+
+	return result
+}

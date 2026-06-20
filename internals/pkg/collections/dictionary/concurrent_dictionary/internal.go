@@ -44,6 +44,51 @@ func (d ConcurrentDictionary[K, V]) _addInternal(key K, value V, h uint64, li, b
 	return 1
 }
 
+func (d ConcurrentDictionary[K, V]) _getKeys() []interface{} {
+	keys := []interface{}{}
+	for _, bucket := range d._table._buckets {
+		entry := bucket
+		for entry.Node != nil {
+			if entry.Key != nil {
+				keys = append(keys, entry.Key)
+				entry = *bucket.Next
+			}
+		}
+	}
+
+	return keys
+}
+
+func (d ConcurrentDictionary[K, V]) _getPairs() map[interface{}]V {
+	d._acquireAllLocks()
+	defer d._releaseAllLocks()
+	values := make(map[interface{}]V)
+
+	for _, bucket := range d._table._buckets {
+		entry := bucket
+		for entry.Node != nil {
+			if entry.Key != nil {
+				values[entry.Key] = entry.Node.Value
+				entry = *bucket.Next
+			}
+		}
+	}
+
+	return values
+}
+
+func (d ConcurrentDictionary[K, V]) _acquireAllLocks() {
+	for i := 0; i < len(d._table._locks)-1; i++ {
+		d.acquireLock(i)
+	}
+}
+
+func (d ConcurrentDictionary[K, V]) _releaseAllLocks() {
+	for i := 0; i < len(d._table._locks)-1; i++ {
+		d.releaseLock(i)
+	}
+}
+
 func (d ConcurrentDictionary[K, V]) _remove(key K, bi, li int) bool {
 	d.acquireLock(li)
 	defer d.releaseLock(li)
