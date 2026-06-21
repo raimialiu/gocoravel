@@ -4,7 +4,7 @@ import "github.com/raimialiu/gocoravel/internals/pkg/system/delegate"
 
 type (
 	IScheduler interface {
-		Schedule(actionToSchedule delegate.Action) IScheduleInterval
+		Schedule(actionToSchedule delegate.Action[interface{}]) IScheduleInterval
 	}
 
 	IScheduleInterval interface {
