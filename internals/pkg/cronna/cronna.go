@@ -2,9 +2,18 @@ package cronna
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/raimialiu/gocoravel/internals/pkg/collections/dictionary/concurrent_dictionary"
+	"github.com/raimialiu/gostream/stream"
+)
+
+const (
+	colorReset  = "\033[0m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorCyan   = "\033[36m"
 )
 
 type (
@@ -40,10 +49,10 @@ func (cr *CronnaJob) Start() error {
 			case t := <-ticker.C:
 				cr.runDue(cr._ctx, t)
 			case <-cr._ctx.Done():
-				ticker.Stop()
-			default:
 				return
 			}
+
+			fmt.Printf("%scronna :-> heartbeat%s\n", colorCyan, colorReset)
 		}
 	}()
 
@@ -51,21 +60,31 @@ func (cr *CronnaJob) Start() error {
 }
 
 func (cr *CronnaJob) runDue(ctx context.Context, t time.Time) {
-	jobs := cr.jobs.ToMap()
+	jobs := stream.FromMap(cr.jobs.ToMap()).
+		Filter(func(k stream.KeyValue[interface{}, Job]) bool {
+			return !k.Value._nextRun.After(t)
+		}).ToList()
 	for _, job := range jobs {
-		if job.expression.Matches(t) {
-			runner := NewRunner(job)
-			runner.Run(ctx, nil)
+		if job.Value.expression.Matches(t) {
+			runner := NewRunner(job.Value)
+			go runner.Run(ctx, nil)
+			job.Value._nextRun = job.Value.Next(t)
+			cr.jobs.TryUpdate(job.Key.(string), job.Value)
 		}
 	}
+
+	fmt.Println("cronna: jobs done")
 }
 
 func (cr *CronnaJob) Stop() {
 	cr._cancel()
 }
 
-func (cr *CronnaJob) AddFunc(cron string, fn func(ctx context.Context) error) {
-	job := NewJob(cron, fn)
+func (cr *CronnaJob) AddFunc(cron string, fn func() error) {
+	jobFn := func(ctx context.Context) error {
+		return fn()
+	}
+	job := NewJob(cron, jobFn)
 	fnName := concurrent_dictionary.FuncName(job.Name())
 	cr.jobs.TryAdd(fnName, *job)
 }

@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/raimialiu/gocoravel/internals/pkg/cronna"
@@ -26,12 +29,19 @@ func main() {
 	if err != nil {
 		return
 	}
+	cronExpression := "*/1 * * * *"
+	c.AddFunc(cronExpression, func() error {
+		fmt.Println(time.Now())
+		fmt.Println("testing my cronna for running cronna")
+		return nil
+	})
 
-	expression := cronna.NewExpression("*/1 * * * *")
-	dueNow := expression.Matches(time.Now())
-	fmt.Println(dueNow)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+	c.Stop()
 
-	// c.AddFunc("*/1 * * * *", func(ctx context.Context) error {
+	// c.AddFunc("*/2 * * * *", func(ctx context.Context) error {
 	// fmt.Println(time.Now())
 	//fmt.Println("testing my cronna for running crons")
 	//return nil

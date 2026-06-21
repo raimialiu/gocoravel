@@ -20,6 +20,24 @@ func (d ConcurrentDictionary[K, V]) _getInternal(key K, hashCode uint64, bucketI
 	return nil
 }
 
+func (d ConcurrentDictionary[K, V]) _updateInternal(key K, value V, h uint64, li, bi int) int {
+	d.acquireLock(li)
+	defer d.releaseLock(li)
+
+	current := d._getInternal(key, h, li)
+	if current == nil {
+		return 0
+	}
+
+	od := new(Entry[K, V])            // 2 -> 3
+	*od = *d._table._buckets[bi].Next // 3
+
+	// value -> 4
+	d._table._buckets[bi] = *NewEntry(key, value, h, od) // 4 -> 3
+
+	return 1
+}
+
 func (d ConcurrentDictionary[K, V]) _addInternal(key K, value V, h uint64, li, bi int) int {
 	d.acquireLock(li)
 	defer d.releaseLock(li)

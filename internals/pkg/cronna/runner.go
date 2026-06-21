@@ -39,14 +39,6 @@ func (r *Runner) Run(ctx context.Context, job *func(ctx context.Context) error) 
 		case <-ctx.Done():
 			return
 		default:
-			next, err := r.NextTime(time.Now())
-			if err != nil {
-				log.Printf("cronna: error getting next time for %q: %v", r.job.expression._rawExpression, err)
-				return
-			} else {
-				time.Sleep(time.Until(next))
-			}
-
 			if job == nil {
 				go func() {
 					err := r.job.fn(ctx)
@@ -57,7 +49,13 @@ func (r *Runner) Run(ctx context.Context, job *func(ctx context.Context) error) 
 				}()
 			} else {
 				fn := *job
-				go fn(ctx)
+				go func() {
+					err := fn(ctx)
+					if err != nil {
+						log.Printf("cronna: error running job %q: %v", r.job.expression._rawExpression, err)
+						panic(err)
+					}
+				}()
 			}
 		}
 	}

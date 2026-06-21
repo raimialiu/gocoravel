@@ -8,6 +8,14 @@ func (d *ConcurrentDictionary[K, V]) TryAdd(key K, value V) bool {
 	return d._addInternal(key, value, h, li, bi) != 0
 }
 
+func (d *ConcurrentDictionary[K, V]) TryUpdate(key K, value V) bool {
+	h := d.getHashCode(key)
+	bi := d.bucketIndex(key, &h)
+	li := d.lockIndex(bi)
+
+	return d._updateInternal(key, value, h, li, bi) != 0
+}
+
 func (d *ConcurrentDictionary[K, V]) Count() int {
 	count := 0
 	for i := 0; i < len(d._table._locks); i++ {

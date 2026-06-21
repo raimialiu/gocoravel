@@ -1,10 +1,8 @@
 package cronna
 
 import (
-	"errors"
 	"fmt"
-	"strconv"
-	"strings"
+	"slices"
 	"time"
 
 	"github.com/raimialiu/gostream/stream"
@@ -26,26 +24,12 @@ func _withMinute(minute ExpressionDataField) ExpressionPartConfig {
 	}
 }
 
-func (p *Parser) CheckIfTimeIsDue(part string, t time.Time) bool {
-	isRange := strings.Contains(part, "-")
-	isDelineatedArray := strings.Contains(part, ",")
-	isDivisibleRange := strings.Contains(part, "/")
-
-	if isRange && isDelineatedArray {
-		panic(errors.New(fmt.Sprintf("Cron expression %s has mixed entry type.", part)))
-	}
-
-	if isDivisibleRange {
-
-	}
-}
-
-func (p *Parser) _checkDivisibleRange(part string, toCheck int, parser Parser) bool {
-	parser.
-}
-
-func (p *Parser) CheckIfSpecificSectionIsDue(s string, t int) bool {
-
+func (p *ExpressionPart) CheckIfTimeIsDue(t time.Time) bool {
+	return p.IsMinuteDue(t) &&
+		p.IsHourDue(t) &&
+		p.IsDayOfMonthDue(t) &&
+		p.IsMonthDue(t) &&
+		p.IsDayOfWeekDue(t)
 }
 
 func (p *ExpressionPart) ToString() string {
@@ -101,39 +85,35 @@ func NewExpressionPart(partString []string, parts ...ExpressionPartConfig) *Expr
 	return part
 }
 
-func (p *ExpressionPart) IsDue(t time.Time, timePart int) bool {
-	return p.expressionPartIsDue(t.Minute(), p._minute.String(), timePart)
+func (p *ExpressionPart) IsMinuteDue(t time.Time) bool {
+	return p.expressionPartIsDue(t.Minute(), p._minute.String(), 60)
+}
+
+func (p *ExpressionPart) IsHourDue(t time.Time) bool {
+	return p.expressionPartIsDue(t.Minute(), p._hour.String(), 24)
+}
+
+func (p *ExpressionPart) IsDayOfMonthDue(t time.Time) bool {
+	return p.expressionPartIsDue(t.Minute(), p._dayOfMonth.String(), 31)
+}
+
+func (p *ExpressionPart) IsMonthDue(t time.Time) bool {
+	return p.expressionPartIsDue(t.Minute(), p._month.String(), 12)
+}
+
+func (p *ExpressionPart) IsDayOfWeekDue(t time.Time) bool {
+	return p.expressionPartIsDue(t.Minute(), p._dayOfWeek.String(), 7)
 }
 
 func (P *ExpressionPart) expressionPartIsDue(time int, part string, timePart int) bool {
-	if part == "" || part == " " {
-		return false
-	}
-	if part == "*" {
-		return true
+	if time == 0 {
+		time = timePart
 	}
 
-	isDivisibleUnit := strings.Index(part, "*/") // 0/2
-	if isDivisibleUnit > -1 {
-		divisor, err := strconv.Atoi(part[0:2])
-		if err != nil {
-			panic(err)
-		}
+	parser := &Parser{}
+	parseResult := parser.PP(part, timePart)
 
-		if divisor == 0 {
-			panic(errors.New(fmt.Sprintf("Cron entry %s is attempting division by zero.", part)))
-		}
-
-		if time == 0 {
-			time = timePart
-		}
-
-		return time%divisor == 0
-	} else {
-		parser := &Parser{}
-		parseResult := parser.ParseSingle(part, 0, timePart)
-
-	}
+	return slices.Contains(parseResult, time)
 }
 
 func (p *ExpressionPart) Minute() ExpressionDataField { return p._minute }

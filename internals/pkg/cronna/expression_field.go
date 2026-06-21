@@ -19,5 +19,5 @@ func NewExpressionField(parser Parser, expression string) (*ExpressionField, err
 		return nil, errors.New("expression is empty")
 	}
 
-	return parser.ParseV2(expression), nil
+	return parser.Parse(expression), nil
 }

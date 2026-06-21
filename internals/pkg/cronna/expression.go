@@ -1,7 +1,6 @@
 package cronna
 
 import (
-	"slices"
 	"time"
 )
 
@@ -9,8 +8,9 @@ import (
 type (
 	ExpressionConfig func(*ExpressionField)
 	Expression       struct {
-		_field         *ExpressionField
-		_rawExpression string
+		_field          *ExpressionField
+		_rawExpression  string
+		_nextEvaluation *time.Time
 	}
 )
 
@@ -28,55 +28,31 @@ func NewExpression(rawExpression string) *Expression {
 	return expression
 }
 
-func (e *Expression) Matches(time time.Time) bool {
-	dueSec := e._IsMinuteDue(time) &&
-		e._IsHourDue(time) &&
-		e._IsDayOfMonthDue(time) &&
-		e._IsMonthDue(time) &&
-		e._IsDayOfWeekDue(time)
+func (e *Expression) NextTime(from time.Time) *time.Time {
+	next := from.Truncate(time.Minute).Add(time.Minute)
+	return &next
 }
 
-func (e *Expression) _IsMinuteDue(t time.Time) bool {
-	value := e._field._part.Minute().String()
-	if value == "*" {
-		return true
-	}
-
-	return slices.Contains(e._field._minutes, t.Minute())
+func (e *Expression) Matches(t time.Time) bool {
+	return e._field._part.CheckIfTimeIsDue(t)
 }
 
-func (e *Expression) _IsHourDue(t time.Time) bool {
-	value := e._field._part.Hour().String()
-	if value == "*" {
-		return true
-	}
-
-	return slices.Contains(e._field._hours, t.Hour())
+func (e *Expression) IsMinuteDue(t time.Time) bool {
+	return e._field._part.IsMinuteDue(t)
 }
 
-func (e *Expression) _IsDayOfMonthDue(t time.Time) bool {
-	value := e._field._part.DayOfMonth().String()
-	if value == "*" {
-		return true
-	}
-
-	return slices.Contains(e._field._dayOfMonth, t.Day())
+func (e *Expression) IsHourDue(t time.Time) bool {
+	return e._field._part.IsHourDue(t)
 }
 
-func (e *Expression) _IsMonthDue(t time.Time) bool {
-	value := e._field._part.Month().String()
-	if value == "*" {
-		return true
-	}
-
-	return slices.Contains(e._field._monthOfYear, int(t.Month()))
+func (e *Expression) IsDayOfMonthDue(t time.Time) bool {
+	return e._field._part.IsDayOfMonthDue(t)
 }
 
-func (e *Expression) _IsDayOfWeekDue(t time.Time) bool {
-	value := e._field._part.DayOfWeek().String()
-	if value == "*" {
-		return true
-	}
+func (e *Expression) IsMonthDue(t time.Time) bool {
+	return e._field._part.IsMonthDue(t)
+}
 
-	return slices.Contains(e._field._dayOfWeek, int(t.Weekday()))
+func (e *Expression) IsDayOfWeekDue(t time.Time) bool {
+	return e._field._part.IsDayOfWeekDue(t)
 }

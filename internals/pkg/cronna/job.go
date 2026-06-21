@@ -2,6 +2,7 @@ package cronna
 
 import (
 	"context"
+	"time"
 
 	"github.com/raimialiu/gocoravel/internals/pkg/collections/dictionary/concurrent_dictionary"
 )
@@ -17,6 +18,7 @@ type (
 		name          string
 		expression    Expression
 		rawExpression string
+		_nextRun      time.Time
 		fn            func(ctx context.Context) error
 	}
 )
@@ -35,6 +37,11 @@ func (j Job) CronExpression() string {
 
 func (j Job) Expression() Expression {
 	return j.expression
+}
+
+func (j Job) Next(t time.Time) time.Time {
+	tr := t.Truncate(time.Minute).Add(time.Minute)
+	return tr
 }
 
 func (j Job) Fn(ctx context.Context) error {
