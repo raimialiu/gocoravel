@@ -3,6 +3,8 @@ package concurrent_dictionary
 import (
 	"math"
 	"reflect"
+	"runtime"
+	"strings"
 )
 
 func ValueOf[K any](data K) interface{} {
@@ -10,6 +12,14 @@ func ValueOf[K any](data K) interface{} {
 	actualValue := keyReflect.Interface()
 
 	return actualValue.(interface{})
+}
+
+func FuncName(fn any) string {
+	name := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
+	parts := strings.Split(name, ".")
+	shortName := parts[len(parts)-1]
+
+	return shortName
 }
 
 func NextPrime(value int) int {

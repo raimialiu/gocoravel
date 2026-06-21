@@ -1,0 +1,6 @@
+github.com/adhocore/gronx v1.20.0 h1:PD13Mo0wekkZ7ZZR9yb1TqeqTfybs7/K3ez9DmjQwEs=
+github.com/adhocore/gronx v1.20.0/go.mod h1:7oUY1WAU8rEJWmAxXR2DN0JaO4gi9khSgKjiRypqteg=
+github.com/raimialiu/gostream v0.1.0 h1:ReA3As6C7sLpxKVh4AthRMs2OC297mrWrSB0EmU9l+w=
+github.com/raimialiu/gostream v0.1.0/go.mod h1:09im3VwGYuM+hzLcm7xz3F+cYxsHptiy0eHcRhcVYV4=
+github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=
+github.com/robfig/cron/v3 v3.0.1/go.mod h1:eQICP3HwyT7UooqI/z+Ov+PtYAWygg1TEWWzGIFLtro=
