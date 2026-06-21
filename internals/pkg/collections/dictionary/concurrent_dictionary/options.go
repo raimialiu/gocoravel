@@ -12,7 +12,7 @@ func DefaultConfig() DictionaryOptions {
 
 // WithConcurrency sets the number of lock stripes. Higher values reduce
 // contention at the cost of memory. Must be at least 1.
-func WithConcurrency(n int) DictionaryOpt {
+func WithConcurrencyLevel(n int) DictionaryOpt {
 	return func(c *DictionaryOptions) {
 		if n >= 1 {
 			c.concurrency = n

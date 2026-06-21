@@ -29,14 +29,14 @@ func NewExpression(rawExpression string) *Expression {
 }
 
 func (e *Expression) Matches(time time.Time) bool {
-	return e.IsMinuteDue(time) &&
-		e.IsHourDue(time) &&
-		e.IsDayOfMonthDue(time) &&
-		e.IsMonthDue(time) &&
-		e.IsDayOfWeekDue(time)
+	dueSec := e._IsMinuteDue(time) &&
+		e._IsHourDue(time) &&
+		e._IsDayOfMonthDue(time) &&
+		e._IsMonthDue(time) &&
+		e._IsDayOfWeekDue(time)
 }
 
-func (e *Expression) IsMinuteDue(t time.Time) bool {
+func (e *Expression) _IsMinuteDue(t time.Time) bool {
 	value := e._field._part.Minute().String()
 	if value == "*" {
 		return true
@@ -45,7 +45,7 @@ func (e *Expression) IsMinuteDue(t time.Time) bool {
 	return slices.Contains(e._field._minutes, t.Minute())
 }
 
-func (e *Expression) IsHourDue(t time.Time) bool {
+func (e *Expression) _IsHourDue(t time.Time) bool {
 	value := e._field._part.Hour().String()
 	if value == "*" {
 		return true
@@ -54,7 +54,7 @@ func (e *Expression) IsHourDue(t time.Time) bool {
 	return slices.Contains(e._field._hours, t.Hour())
 }
 
-func (e *Expression) IsDayOfMonthDue(t time.Time) bool {
+func (e *Expression) _IsDayOfMonthDue(t time.Time) bool {
 	value := e._field._part.DayOfMonth().String()
 	if value == "*" {
 		return true
@@ -63,7 +63,7 @@ func (e *Expression) IsDayOfMonthDue(t time.Time) bool {
 	return slices.Contains(e._field._dayOfMonth, t.Day())
 }
 
-func (e *Expression) IsMonthDue(t time.Time) bool {
+func (e *Expression) _IsMonthDue(t time.Time) bool {
 	value := e._field._part.Month().String()
 	if value == "*" {
 		return true
@@ -72,7 +72,7 @@ func (e *Expression) IsMonthDue(t time.Time) bool {
 	return slices.Contains(e._field._monthOfYear, int(t.Month()))
 }
 
-func (e *Expression) IsDayOfWeekDue(t time.Time) bool {
+func (e *Expression) _IsDayOfWeekDue(t time.Time) bool {
 	value := e._field._part.DayOfWeek().String()
 	if value == "*" {
 		return true

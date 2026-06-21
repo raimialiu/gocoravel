@@ -49,10 +49,8 @@ func (d ConcurrentDictionary[K, V]) _getKeys() []interface{} {
 	for _, bucket := range d._table._buckets {
 		entry := bucket
 		for entry.Node != nil {
-			if entry.Key != nil {
-				keys = append(keys, entry.Key)
-				entry = *bucket.Next
-			}
+			keys = append(keys, entry.Key)
+			entry = *bucket.Next
 		}
 	}
 
@@ -67,10 +65,9 @@ func (d ConcurrentDictionary[K, V]) _getPairs() map[interface{}]V {
 	for _, bucket := range d._table._buckets {
 		entry := bucket
 		for entry.Node != nil {
-			if entry.Key != nil {
-				values[entry.Key] = entry.Node.Value
-				entry = *bucket.Next
-			}
+			values[entry.Key] = entry.Node.Value
+			entry = *bucket.Next
+
 		}
 	}
 

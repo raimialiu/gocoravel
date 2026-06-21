@@ -5,7 +5,7 @@ import (
 
 	"github.com/raimialiu/gocoravel/internals/pkg/collections/dictionary/concurrent_dictionary"
 	"github.com/raimialiu/gocoravel/internals/pkg/system/delegate"
-	"github.com/raimialiu/gostream/stream"
+	_ "github.com/raimialiu/gostream/stream"
 )
 
 type (
@@ -37,8 +37,4 @@ func (s *Scheduler) TryUnschedule(taskId string) bool {
 	}
 
 	return s._tasks.TryRemove(taskId)
-}
-
-func (s *Scheduler) Schedule(actionToSchedule delegate.Action[interface{}]) IScheduleInterval {
-
 }
