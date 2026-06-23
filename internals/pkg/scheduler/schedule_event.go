@@ -32,6 +32,7 @@ type (
 		_invocableType       *IInvocable
 		_scheduler           *Scheduler
 		_uniqueId            string
+		_ensurePersistence   bool
 	}
 
 	ScheduleEventConfig func(*ScheduleEvent)
@@ -176,6 +177,12 @@ func (e *ScheduleEvent) PreventOverlapping(name string) {
 	e.Name(name)
 }
 
+func (e *ScheduleEvent) EnsurePersistence() {
+	e._ensurePersistence = true
+}
+
+func (e *ScheduleEvent) ShouldPersist() bool { return e._ensurePersistence }
+
 func NewScheduleEvent(configs ...ScheduleEventConfig) *ScheduleEvent {
 	s := &ScheduleEvent{}
 	for _, config := range configs {
@@ -195,6 +202,13 @@ func NewScheduleEvent(configs ...ScheduleEventConfig) *ScheduleEvent {
 
 	s._timeLocation = location
 	s._zoneTime = time.Now().In(location)
+
+	// Provisional unique id so unnamed jobs never collide on the empty key in the
+	// task table; Name/PreventOverlapping override it, and persistence swaps it
+	// for a stable derived id (see Scheduler.Sync).
+	if s._uniqueId == "" {
+		s._uniqueId = fmt.Sprintf("%s%p", autoIDPrefix, s)
+	}
 
 	return s
 }

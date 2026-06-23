@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/raimialiu/gocoravel/internals/pkg/collections/dictionary/concurrent_dictionary"
+	"github.com/raimialiu/gocoravel/internals/pkg/store"
 	"github.com/raimialiu/gocoravel/internals/pkg/system/delegate"
 	"github.com/raimialiu/gostream/stream"
 	_ "github.com/raimialiu/gostream/stream"
@@ -15,8 +16,9 @@ type (
 	Scheduler struct {
 		_tasks        *concurrent_dictionary.ConcurrentDictionary[string, *ScheduleEvent]
 		_ctx          context.Context
-		_errorHandler delegate.Action[error]
+		_errorHandler func(error)
 		_cancel       context.CancelFunc
+		_store        *store.CoravelStore
 	} // hold job list, and begin the whole process together
 
 	ScheduleOpts func(asyncFunc *delegate.ActionOrAsyncFunc)
@@ -112,7 +114,7 @@ func (s *Scheduler) RunAt(time time.Time) *Scheduler {
 
 func (s *Scheduler) runJobs(t time.Time) {
 	jobs := s._tasks.ToMap()
-	scheduledJobs := make([]ScheduleEvent, 0)
+	scheduledJobs := make([]*ScheduleEvent, 0)
 	for _, job := range jobs {
 		timerIsAtMinute := t.Second() == 0
 		taskIsSecondsBased := !job.IsCronBasedTask()
@@ -120,21 +122,20 @@ func (s *Scheduler) runJobs(t time.Time) {
 		canRunBasedOnTimeMarker := timerIsAtMinute || taskIsSecondsBased
 
 		if canRunBasedOnTimeMarker && job.IsDue(t) || runOnceAtStart {
-			scheduledJobs = append(scheduledJobs, *job)
+			scheduledJobs = append(scheduledJobs, job)
 		}
-
 	}
 
 	groupedJobs := stream.Of(scheduledJobs...).
-		GroupBy(func(event ScheduleEvent) interface{} {
+		GroupBy(func(event *ScheduleEvent) interface{} {
 			return event.OverlappingUniqueIdentifier()
 		})
 
+	// Each due job runs exactly once per tick — the collect loop above no longer
+	// invokes (that was the double-execution) — and execute records its outcome.
 	for _, groupJobs := range groupedJobs {
 		for _, job := range groupJobs {
-			go func() {
-				job.InvokeScheduledEvent(t)
-			}()
+			go s.execute(job, t)
 		}
 	}
 }

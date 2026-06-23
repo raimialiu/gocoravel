@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/raimialiu/gocoravel/internals/pkg/store"
 )
 
 type SchedulerHost struct {
@@ -13,6 +15,7 @@ type SchedulerHost struct {
 	_ctx          context.Context
 	_cancel       context.CancelFunc
 	_previousTick time.Time
+	_store        *store.CoravelStore
 }
 
 func NewSchedulerHost(scheduler *Scheduler, ctx context.Context, cancelFunc context.CancelFunc) *SchedulerHost {
