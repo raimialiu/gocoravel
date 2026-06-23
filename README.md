@@ -1,6 +1,6 @@
 # gocoravel
 
-A task scheduler for Go, inspired by [Laravel Coravel](https://docs.coravel.net/). Schedule work in code with a fluent API, optionally persist it to Redis so schedules and run history survive restarts, and watch/control everything from a live web dashboard.
+A task scheduler for Go, inspired by [.NET Coravel](https://docs.coravel.net/). Schedule work in code with a fluent API, optionally persist it to Redis so schedules and run history survive restarts, and watch/control everything from a live web dashboard.
 
 - **Fluent scheduling** — `EverySecond()`, `EveryFiveSeconds()`, `EveryMinute()`, `Daily()`, `Cron("*/5 * * * *")`, …
 - **Two kinds of jobs** — anonymous closures, or typed *invocables* (so they can be rebuilt on restart).
@@ -426,4 +426,4 @@ c.AddPersistenceStorage(cfg, providers.ProviderKind("postgres"))
 
 ---
 
-*Inspired by Laravel Coravel. Built in Go.*
+*Inspired by [.NET Coravel](https://github.com/jamesmh/coravel). Built in Go.*
