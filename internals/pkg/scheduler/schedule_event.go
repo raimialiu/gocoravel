@@ -1,8 +1,8 @@
 package scheduler
 
 import (
-	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -10,6 +10,7 @@ import (
 	"github.com/raimialiu/gocoravel/internals/pkg/system/delegate"
 )
 
+// DFG
 const (
 	ONE_MINUTE_AS_SECOND = 60
 )
@@ -36,12 +37,143 @@ type (
 	ScheduleEventConfig func(*ScheduleEvent)
 )
 
-func WithScheduleFunc[T any, R bool](predicate delegate.Func[T, R]) ScheduleEventConfig {
-	return func(event *ScheduleEvent) {}
+func (s *ScheduleEvent) NotSecondBase() {
+	s._isSchedulePerSecond = false
 }
 
-func WithScheduleAction[T any](predicate delegate.Action[T]) ScheduleEventConfig {
-	return func(event *ScheduleEvent) {}
+func (e *ScheduleEvent) EveryFiveSeconds() *ScheduleEvent {
+	secondValue := 5
+	e._isSchedulePerSecond = true
+	e._secondInterval = &secondValue
+
+	return e
+}
+
+func (e *ScheduleEvent) EverySecondAt(t int) *ScheduleEvent {
+	e._isSchedulePerSecond = true
+	e._secondInterval = &t
+
+	return e
+}
+
+func (e *ScheduleEvent) EverySecond() *ScheduleEvent {
+	secondValue := 1
+	e._isSchedulePerSecond = true
+	e._secondInterval = &secondValue
+
+	return e
+}
+
+func (e *ScheduleEvent) Hourly() *ScheduleEvent {
+	e._cronExpression = "00 * * * *"
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) Daily() *ScheduleEvent {
+	e._cronExpression = "00 00 * * *"
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) DailyAt(t int) *ScheduleEvent {
+	e._cronExpression = fmt.Sprintf("%d 00 * * *", t)
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) HourlyAt(t int) *ScheduleEvent {
+	e._cronExpression = fmt.Sprintf("%d 00 * * * *", t)
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) EveryMinute() *ScheduleEvent {
+	e._cronExpression = "* * * * *"
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) EveryFiveMinutes() *ScheduleEvent {
+	e._cronExpression = "*/5 * * * *"
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) EveryTenMinutes() *ScheduleEvent {
+	e._cronExpression = "*/10 * * * *"
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) EveryThirtyMinutes() *ScheduleEvent {
+	e._cronExpression = "*/30 * * * *"
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) Weekly() *ScheduleEvent {
+	e._cronExpression = "00 00 * * 1"
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) WeeklyAt(t int) *ScheduleEvent {
+	e._cronExpression = fmt.Sprintf("00 00 * * %d", t)
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) Monthly() *ScheduleEvent {
+	e._cronExpression = "00 00 1 * *"
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) MonthlyAt(t int) *ScheduleEvent {
+	e._cronExpression = fmt.Sprintf("00 00 %d * *", t)
+	e.NotSecondBase()
+	return e
+}
+
+func (e *ScheduleEvent) Cron(expression string) *ScheduleEvent {
+	e._cronExpression = expression
+	e.NotSecondBase()
+	return e
+}
+
+func WithScheduleFunc[T any, R bool](predicate delegate.Func[interface{}, interface{}]) ScheduleEventConfig {
+	return func(event *ScheduleEvent) {
+		event._scheduleAction = *delegate.NewAction(nil, predicate)
+	}
+}
+
+func WithInvocableType(invocableType any) ScheduleEventConfig {
+	return func(event *ScheduleEvent) {
+		if vl, ok := invocableType.(IInvocable); ok {
+			event._invocableType = &vl
+		}
+	}
+}
+
+func WithInvocableTypeAndParams(invocableType any, params ...interface{}) ScheduleEventConfig {
+	return func(event *ScheduleEvent) {
+		if vl, ok := invocableType.(IInvocable); ok {
+			event._invocableType = &vl
+			event._parameters = params
+		}
+	}
+}
+
+func WithScheduleAction[T any](predicate delegate.Action[interface{}]) ScheduleEventConfig {
+	return func(event *ScheduleEvent) {
+		event._scheduleAction = *delegate.NewAction(predicate, nil)
+	}
+}
+
+func (e *ScheduleEvent) PreventOverlapping(name string) {
+	e._preventOverlapping = true
+	e._uniqueId = name
 }
 
 func NewScheduleEvent(configs ...ScheduleEventConfig) *ScheduleEvent {
@@ -51,8 +183,7 @@ func NewScheduleEvent(configs ...ScheduleEventConfig) *ScheduleEvent {
 	}
 
 	s._zoneTime = time.Now().UTC()
-	s._isSchedulePerSecond = s._cronExpression != ""
-
+	s._isSchedulePerSecond = s._cronExpression == ""
 	if s._preferredLocation != "" {
 		location, err := time.LoadLocation(s._preferredLocation)
 		if err != nil {
@@ -66,8 +197,8 @@ func NewScheduleEvent(configs ...ScheduleEventConfig) *ScheduleEvent {
 	return s
 }
 
-func (e *ScheduleEvent) InvokeScheduledEvent(ctx context.Context) {
-	if e.WhenPredicateFails() {
+func (e *ScheduleEvent) InvokeScheduledEvent(t time.Time) {
+	if e.WhenPredicateFails() || !e.IsDue(t) {
 		return
 	}
 
@@ -76,19 +207,46 @@ func (e *ScheduleEvent) InvokeScheduledEvent(ctx context.Context) {
 	} else {
 		invocableValue := reflect.ValueOf(e._invocableType)
 		if invocableValue.Kind() == reflect.Ptr {
-			invocable := invocableValue.Elem().Interface().(IInvocable)
-			go func() {
-				_, err := invocable.Invoke()
+			if invocable, ok := invocableValue.Elem().Interface().(IInvocable); ok {
+				_, err := e._Invoke(&invocable, e._parameters)
 				if err != nil {
-					panic(err)
+					return
 				}
-			}()
-
+			}
+		} else {
+			_, err := e._Invoke(e._invocableType, e._parameters)
+			if err != nil {
+				return
+			}
 		}
 	}
 
 	e.markAsExecuteOnce()
 	e.unscheduleIfWarranted()
+}
+
+func (e *ScheduleEvent) _Invoke(invocableType *IInvocable, params ...interface{}) (bool, error) {
+	if invocableType == nil {
+		panic(errors.New("invocable type is nil"))
+	}
+	invocable := *invocableType
+	if len(e._parameters) == 0 {
+		go func() {
+			_, err := invocable.Invoke()
+			if err != nil {
+				panic(err)
+			}
+		}()
+		return true, nil
+	}
+
+	go func() {
+		_, err := invocable.InvokeWithPayload(params...)
+		if err != nil {
+			panic(err)
+		}
+	}()
+	return true, nil
 }
 
 func (e *ScheduleEvent) WhenPredicateFails() bool {
@@ -100,6 +258,13 @@ func (e *ScheduleEvent) markAsExecuteOnce()                  { e._wasPreviouslyR
 func (e *ScheduleEvent) previouslyRanAndMarkedToRunOnlyOnce() bool {
 	return e._runOnce && e._wasPreviouslyRun
 }
+
+func (e *ScheduleEvent) Name(value string) *ScheduleEvent {
+	e._uniqueId = value
+	return e
+}
+
+func (e *ScheduleEvent) RunOnceAtStart() bool { return e._runOnce }
 
 func (e *ScheduleEvent) unscheduleIfWarranted() {
 	if e._scheduler != nil && e.previouslyRanAndMarkedToRunOnlyOnce() {

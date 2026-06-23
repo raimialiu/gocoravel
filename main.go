@@ -5,9 +5,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/raimialiu/gocoravel/internals/pkg/cronna"
+	"github.com/raimialiu/gocoravel/internals/pkg/coravel"
 )
 
 func main() {
@@ -24,16 +23,35 @@ func main() {
 		fmt.Println(deleted)
 		fmt.Println(*dict.Get(3))
 	*/
-	c := cronna.New()
-	err := c.Start()
-	if err != nil {
-		return
+	/*
+		c := cronna.New()
+		err := c.Start()
+		if err != nil {
+			return
+		}
+		cronExpression := "* * * * *"
+		c.AddFunc(cronExpression, func() error {
+			fmt.Println(time.Now())
+			fmt.Println("testing my cronna for running cronna")
+			return nil
+		})
+	*/
+
+	pureFunc := func(payload ...interface{}) interface{} {
+		name := payload[0].(string)
+		fmt.Printf("%s is running\n", name)
+		return name
 	}
-	cronExpression := "*/1 * * * *"
-	c.AddFunc(cronExpression, func() error {
-		fmt.Println(time.Now())
-		fmt.Println("testing my cronna for running cronna")
-		return nil
+
+	c := coravel.NewCoravel().
+		AddScheduler()
+
+	c.UseScheduler(func(scheduler *coravel.Coravel) {
+		scheduler.
+			Scheduler().
+			ScheduleFunc(pureFunc).
+			EverySecond().
+			PreventOverlapping("pureFunc")
 	})
 
 	quit := make(chan os.Signal, 1)
