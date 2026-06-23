@@ -28,7 +28,7 @@ type (
 		_cronExpression      string
 		_isSchedulePerSecond bool
 		_timeLocation        *time.Location
-		_secondInterval      *int
+		_secondInterval      int
 		_invocableType       *IInvocable
 		_scheduler           *Scheduler
 		_uniqueId            string
@@ -44,14 +44,14 @@ func (s *ScheduleEvent) NotSecondBase() {
 func (e *ScheduleEvent) EveryFiveSeconds() *ScheduleEvent {
 	secondValue := 5
 	e._isSchedulePerSecond = true
-	e._secondInterval = &secondValue
+	e._secondInterval = secondValue
 
 	return e
 }
 
 func (e *ScheduleEvent) EverySecondAt(t int) *ScheduleEvent {
 	e._isSchedulePerSecond = true
-	e._secondInterval = &t
+	e._secondInterval = t
 
 	return e
 }
@@ -59,7 +59,7 @@ func (e *ScheduleEvent) EverySecondAt(t int) *ScheduleEvent {
 func (e *ScheduleEvent) EverySecond() *ScheduleEvent {
 	secondValue := 1
 	e._isSchedulePerSecond = true
-	e._secondInterval = &secondValue
+	e._secondInterval = secondValue
 
 	return e
 }
@@ -173,7 +173,7 @@ func WithScheduleAction[T any](predicate delegate.Action[interface{}]) ScheduleE
 
 func (e *ScheduleEvent) PreventOverlapping(name string) {
 	e._preventOverlapping = true
-	e._uniqueId = name
+	e.Name(name)
 }
 
 func NewScheduleEvent(configs ...ScheduleEventConfig) *ScheduleEvent {
@@ -182,17 +182,19 @@ func NewScheduleEvent(configs ...ScheduleEventConfig) *ScheduleEvent {
 		config(s)
 	}
 
+	if s._preferredLocation == "" {
+		s._preferredLocation = "Africa/Lagos"
+	}
 	s._zoneTime = time.Now().UTC()
 	s._isSchedulePerSecond = s._cronExpression == ""
-	if s._preferredLocation != "" {
-		location, err := time.LoadLocation(s._preferredLocation)
-		if err != nil {
-			panic(err)
-		}
 
-		s._timeLocation = location
-		s._zoneTime = time.Now().In(location)
+	location, err := time.LoadLocation(s._preferredLocation)
+	if err != nil {
+		panic(err)
 	}
+
+	s._timeLocation = location
+	s._zoneTime = time.Now().In(location)
 
 	return s
 }
@@ -285,10 +287,14 @@ func (e *ScheduleEvent) IsDue(now time.Time) bool {
 	)
 
 	if e._isSchedulePerSecond {
+		if e._secondInterval <= 0 {
+			return false
+		}
+
 		if now.Second() == 0 {
-			return ONE_MINUTE_AS_SECOND%*e._secondInterval == 0
+			return ONE_MINUTE_AS_SECOND%e._secondInterval == 0
 		} else {
-			return now.Second()%*e._secondInterval == 0
+			return now.Second()%e._secondInterval == 0
 		}
 	} else {
 

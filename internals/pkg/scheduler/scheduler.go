@@ -13,7 +13,7 @@ import (
 
 type (
 	Scheduler struct {
-		_tasks        *concurrent_dictionary.ConcurrentDictionary[string, ScheduleEvent]
+		_tasks        *concurrent_dictionary.ConcurrentDictionary[string, *ScheduleEvent]
 		_ctx          context.Context
 		_errorHandler delegate.Action[error]
 		_cancel       context.CancelFunc
@@ -36,7 +36,7 @@ func (s *Scheduler) Schedule(
 		ev._invocableType = invocableType
 	}
 
-	s._tasks.TryAdd(ev.OverlappingUniqueIdentifier(), *ev)
+	s._tasks.TryAdd(ev.OverlappingUniqueIdentifier(), ev)
 	return ev
 }
 
@@ -45,7 +45,7 @@ func (s *Scheduler) ScheduleSimple(actionToSchedule delegate.Action[interface{}]
 		WithScheduleAction[interface{}](actionToSchedule),
 	)
 
-	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), *event)
+	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), event)
 	return event
 }
 
@@ -54,7 +54,7 @@ func (s *Scheduler) SchedulePureFunc(function func(params ...any) any, params ..
 		WithInvocableTypeAndParams(function, params...),
 	)
 
-	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), *event)
+	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), event)
 	return event
 }
 
@@ -63,7 +63,7 @@ func (s *Scheduler) ScheduleFunc(fun delegate.Func[interface{}, interface{}]) *S
 		WithScheduleFunc[interface{}](fun),
 	)
 
-	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), *event)
+	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), event)
 	return event
 }
 
@@ -76,7 +76,7 @@ func (s *Scheduler) ScheduleInvocable(invocableType any) *ScheduleEvent {
 		WithInvocableType(invocableType),
 	)
 
-	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), *event)
+	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), event)
 	return event
 }
 
@@ -89,14 +89,15 @@ func (s *Scheduler) ScheduleInvocableWithParams(invocableType any, params ...int
 		WithInvocableTypeAndParams(invocableType, params),
 	)
 
-	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), *event)
+	s._tasks.TryAdd(event.OverlappingUniqueIdentifier(), event)
 	return event
 }
 
-func NewScheduler(ctx context.Context) *Scheduler {
+func NewScheduler(ctx context.Context, cancelFunc context.CancelFunc) *Scheduler {
 	return &Scheduler{
-		_tasks: concurrent_dictionary.New[string, ScheduleEvent](nil, nil),
-		_ctx:   ctx,
+		_tasks:  concurrent_dictionary.New[string, *ScheduleEvent](nil, nil),
+		_ctx:    ctx,
+		_cancel: cancelFunc,
 	}
 }
 
@@ -119,10 +120,7 @@ func (s *Scheduler) runJobs(t time.Time) {
 		canRunBasedOnTimeMarker := timerIsAtMinute || taskIsSecondsBased
 
 		if canRunBasedOnTimeMarker && job.IsDue(t) || runOnceAtStart {
-			scheduledJobs = append(scheduledJobs, job)
-			go func() {
-				job.InvokeScheduledEvent(t)
-			}()
+			scheduledJobs = append(scheduledJobs, *job)
 		}
 
 	}

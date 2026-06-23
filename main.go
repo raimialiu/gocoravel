@@ -37,11 +37,11 @@ func main() {
 		})
 	*/
 
-	pureFunc := func(payload ...interface{}) interface{} {
-		name := payload[0].(string)
-		fmt.Printf("%s is running\n", name)
-		return name
+	nameFunc := func() {
+		fmt.Println("running action")
 	}
+
+	//pureFunc := delegate.NewAction(nameFunc, nil)
 
 	c := coravel.NewCoravel().
 		AddScheduler()
@@ -49,8 +49,8 @@ func main() {
 	c.UseScheduler(func(scheduler *coravel.Coravel) {
 		scheduler.
 			Scheduler().
-			ScheduleFunc(pureFunc).
-			EverySecond().
+			ScheduleSimple(nameFunc).
+			EveryMinute().
 			PreventOverlapping("pureFunc")
 	})
 

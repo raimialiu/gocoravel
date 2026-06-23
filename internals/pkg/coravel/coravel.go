@@ -19,9 +19,9 @@ func NewCoravel(configs ...CoravelConfig) *Coravel {
 }
 
 func (c *Coravel) AddScheduler() *Coravel {
-	ctx := context.Background()
-	s := scheduler.NewScheduler(ctx)
-	h := scheduler.NewSchedulerHost(s)
+	ctx, cancel := context.WithCancel(context.Background())
+	s := scheduler.NewScheduler(ctx, cancel)
+	h := scheduler.NewSchedulerHost(s, ctx, cancel)
 
 	go h.Start()
 	c._scheduler = *s
