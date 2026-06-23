@@ -33,6 +33,7 @@ type (
 		_scheduler           *Scheduler
 		_uniqueId            string
 		_ensurePersistence   bool
+		_paused              bool
 	}
 
 	ScheduleEventConfig func(*ScheduleEvent)

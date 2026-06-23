@@ -19,6 +19,7 @@ type (
 		_errorHandler func(error)
 		_cancel       context.CancelFunc
 		_store        *store.CoravelStore
+		_feed         *feed
 	} // hold job list, and begin the whole process together
 
 	ScheduleOpts func(asyncFunc *delegate.ActionOrAsyncFunc)
@@ -100,6 +101,7 @@ func NewScheduler(ctx context.Context, cancelFunc context.CancelFunc) *Scheduler
 		_tasks:  concurrent_dictionary.New[string, *ScheduleEvent](nil, nil),
 		_ctx:    ctx,
 		_cancel: cancelFunc,
+		_feed:   newFeed(),
 	}
 }
 
@@ -116,6 +118,9 @@ func (s *Scheduler) runJobs(t time.Time) {
 	jobs := s._tasks.ToMap()
 	scheduledJobs := make([]*ScheduleEvent, 0)
 	for _, job := range jobs {
+		if job.IsPaused() {
+			continue
+		}
 		timerIsAtMinute := t.Second() == 0
 		taskIsSecondsBased := !job.IsCronBasedTask()
 		runOnceAtStart := job.RunOnceAtStart()

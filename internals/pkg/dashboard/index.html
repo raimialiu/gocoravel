@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}} · scheduler</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--panel2:#0c0e12;--line:#262b36;--fg:#e6e9ef;--muted:#8b93a7;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--accent:#388bfd;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  a{color:inherit;text-decoration:none;}
+  code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:12.5px;}
+  .muted{color:var(--muted);}
+  .app{display:grid;grid-template-columns:220px 1fr;min-height:100vh;}
+  .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:4px;}
+  .brand{font-weight:700;font-size:16px;padding:6px 10px 14px;display:flex;align-items:center;gap:8px;}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--bad);transition:background .3s;}
+  .brand .dot.live{background:var(--ok);}
+  .nav{padding:8px 10px;border-radius:7px;color:var(--muted);cursor:pointer;font-weight:500;}
+  .nav:hover{background:#1b212b;color:var(--fg);}
+  .nav.active{background:#1f2530;color:var(--fg);}
+  .content{display:flex;flex-direction:column;min-width:0;}
+  header.bar{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line);}
+  header.bar h1{font-size:16px;margin:0;font-weight:600;}
+  .spacer{flex:1;}
+  main{padding:20px 22px;}
+  button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 11px;cursor:pointer;font-size:13px;}
+  button:hover{border-color:var(--accent);}
+  button.danger:hover{border-color:var(--bad);color:var(--bad);}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .card-v{font-size:26px;font-weight:650;}
+  .card-v.ok{color:var(--ok);} .card-v.bad{color:var(--bad);}
+  .card-l{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.04em;}
+  tr.row{cursor:pointer;} tr.row:hover{background:#1b212b;}
+  h2,h3{font-weight:600;} h3{margin:18px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);color:var(--muted);}
+  .pill.ok{color:var(--ok);border-color:#1f3d28;} .pill.bad{color:var(--bad);border-color:#3d2222;} .pill.paused{color:var(--warn);border-color:#3d3422;}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .back{display:inline-block;margin-bottom:12px;color:var(--muted);}
+  .back:hover{color:var(--fg);}
+  .detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px;}
+  .detail-head h2{margin:0 0 4px;}
+  .timeline{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px;}
+  .tl{width:11px;height:18px;border-radius:2px;background:var(--line);}
+  .tl.ok{background:var(--ok);} .tl.bad{background:var(--bad);}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot" id="live"></span> {{TITLE}}</div>
+    <a class="nav" data-nav="overview" href="#/overview">Overview</a>
+    <a class="nav" data-nav="jobs" href="#/jobs">Jobs</a>
+    <a class="nav" data-nav="errors" href="#/errors">Errors</a>
+  </aside>
+  <div class="content">
+    <header class="bar">
+      <h1 id="view-title">Overview</h1>
+      <span class="spacer"></span>
+      <button id="replay" title="Re-run missed jobs (persistence only)">Replay</button>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+<script>
+const BASE = "{{BASE}}";
+const token = new URLSearchParams(location.search).get("token") || "";
+const q = token ? ("?token=" + encodeURIComponent(token)) : "";
+const enc = encodeURIComponent;
+const apiURL = (p) => BASE + "/api" + p + q;
+const getJSON = async (p) => { try { return await (await fetch(apiURL(p))).json(); } catch(_) { return null; } };
+const api = (method, p) => fetch(apiURL(p), {method});
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+function fmtTime(t){ if(!t || String(t).startsWith("0001")) return "—"; return new Date(t).toLocaleTimeString(); }
+function statusPill(s){ if(s==="succeeded")return '<span class="pill ok">ok</span>'; if(s==="failed")return '<span class="pill bad">failed</span>'; if(!s)return '<span class="pill">—</span>'; return '<span class="pill">'+esc(s)+'</span>'; }
+function stateBadges(j){ const s = j.paused?'<span class="pill paused">paused</span>':'<span class="pill ok">active</span>'; return s + (j.persistent?' <span class="pill">persisted</span>':'') + (j.runOnce?' <span class="pill">once</span>':''); }
+function card(label,val,cls){ return `<div class="card"><div class="card-v ${cls||""}">${val}</div><div class="card-l">${label}</div></div>`; }
+
+function parseHash(){ const m=(location.hash||"#/overview").slice(2).split("/"); return {name:m[0]||"overview", id:m[1]?decodeURIComponent(m[1]):""}; }
+
+async function overviewView(){
+  const o = await getJSON("/overview") || {};
+  const cards = [
+    card("Jobs", o.jobs||0), card("Active", o.active||0), card("Paused", o.paused||0),
+    card("Total runs", o.totalRuns||0), card("Succeeded", o.succeeded||0, "ok"), card("Failed", o.failed||0, (o.failed?"bad":"")),
+  ].join("");
+  let rows = (o.recent||[]).map(r=>`<tr data-job="${esc(r.jobId)}" class="row"><td><code>${esc(r.jobId)}</code></td><td>${fmtTime(r.startedAt)}</td><td>${statusPill(r.status)}</td><td class="muted">${esc(r.err||"")}</td></tr>`).join("");
+  if(!rows) rows = '<tr><td colspan="4" class="muted">No activity yet.</td></tr>';
+  return `<div class="cards">${cards}</div><h3>Recent activity</h3><table><thead><tr><th>Job</th><th>When</th><th>Status</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function jobsView(){
+  const jobs = await getJSON("/jobs") || [];
+  if(!jobs.length) return '<p class="muted">No jobs registered.</p>';
+  const rows = jobs.map(j=>`
+    <tr class="row" data-job="${esc(j.id)}">
+      <td><code>${esc(j.id)}</code></td>
+      <td>${esc(j.schedule||"—")}</td>
+      <td class="muted">${esc(j.type)}</td>
+      <td>${stateBadges(j)}</td>
+      <td class="muted">${fmtTime(j.lastRun)}</td>
+      <td>${statusPill(j.lastStatus)}</td>
+      <td><div class="actions">
+        <button data-act="trigger" data-id="${esc(j.id)}">Run</button>
+        <button data-act="${j.paused?"resume":"pause"}" data-id="${esc(j.id)}">${j.paused?"Resume":"Pause"}</button>
+        <button class="danger" data-act="delete" data-id="${esc(j.id)}">Delete</button>
+      </div></td>
+    </tr>`).join("");
+  return `<table><thead><tr><th>Job</th><th>Schedule</th><th>Type</th><th>State</th><th>Last run</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function jobDetailView(id){
+  const [jobs, m, runs] = await Promise.all([getJSON("/jobs"), getJSON("/jobs/"+enc(id)+"/metrics"), getJSON("/jobs/"+enc(id)+"/runs")]);
+  const j = (jobs||[]).find(x=>x.id===id) || {id};
+  const met = m || {};
+  const cards = [
+    card("Total runs", met.total||0),
+    card("Success rate", (met.total? Math.round((met.successRate||0)*100):0)+"%", met.failed?"":"ok"),
+    card("Avg duration", (met.avgMs||0)+"ms"),
+    card("Failed", met.failed||0, met.failed?"bad":""),
+  ].join("");
+  const timeline = (runs||[]).slice(-50).map(r=>`<span class="tl ${r.status==="succeeded"?"ok":(r.status==="failed"?"bad":"")}" title="${fmtTime(r.startedAt)} · ${esc(r.status)}"></span>`).join("");
+  let hist = (runs||[]).slice().reverse().map(r=>{ const d=new Date(r.finishedAt)-new Date(r.startedAt); return `<tr><td>${fmtTime(r.startedAt)}</td><td>${d>=0?d+"ms":"—"}</td><td>${statusPill(r.status)}</td><td class="muted">${esc(r.err||"")}</td></tr>`; }).join("");
+  if(!hist) hist = '<tr><td colspan="4" class="muted">No runs recorded yet.</td></tr>';
+  return `
+    <a class="back" href="#/jobs">← Jobs</a>
+    <div class="detail-head">
+      <div><h2><code>${esc(id)}</code></h2><div class="muted">${esc(j.schedule||"")} · ${esc(j.type||"")} &nbsp; ${stateBadges(j)}</div></div>
+      <div class="actions">
+        <button data-act="trigger" data-id="${esc(id)}">Run now</button>
+        <button data-act="${j.paused?"resume":"pause"}" data-id="${esc(id)}">${j.paused?"Resume":"Pause"}</button>
+        <button data-act="clear" data-id="${esc(id)}">Clear history</button>
+        <button class="danger" data-act="delete" data-id="${esc(id)}">Delete</button>
+      </div>
+    </div>
+    <div class="cards">${cards}</div>
+    <div class="timeline">${timeline || '<span class="muted">no runs</span>'}</div>
+    <h3>Run history</h3>
+    <table><thead><tr><th>Started</th><th>Duration</th><th>Status</th><th>Error</th></tr></thead><tbody>${hist}</tbody></table>`;
+}
+
+async function errorsView(){
+  const errs = await getJSON("/errors") || [];
+  let rows = errs.map(r=>`<tr class="row" data-job="${esc(r.jobId)}"><td><code>${esc(r.jobId)}</code></td><td>${fmtTime(r.startedAt)}</td><td class="muted">${esc(r.err||"")}</td></tr>`).join("");
+  if(!rows) rows = '<tr><td colspan="3" class="muted">No errors recorded. 🎉</td></tr>';
+  return `<table><thead><tr><th>Job</th><th>When</th><th>Error</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function render(){
+  const {name, id} = parseHash();
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("active", n.dataset.nav===name));
+  const view = document.getElementById("view");
+  const title = document.getElementById("view-title");
+  if(name==="jobs" && id){ title.textContent = "Job · "+id; view.innerHTML = await jobDetailView(id); }
+  else if(name==="errors"){ title.textContent = "Errors"; view.innerHTML = await errorsView(); }
+  else if(name==="jobs"){ title.textContent = "Jobs"; view.innerHTML = await jobsView(); }
+  else { title.textContent = "Overview"; view.innerHTML = await overviewView(); }
+}
+
+async function doAction(act, id){
+  if(act==="trigger") await api("POST","/jobs/"+enc(id)+"/trigger");
+  else if(act==="pause") await api("POST","/jobs/"+enc(id)+"/pause");
+  else if(act==="resume") await api("POST","/jobs/"+enc(id)+"/resume");
+  else if(act==="clear") await api("DELETE","/jobs/"+enc(id)+"/runs");
+  else if(act==="delete"){ await api("DELETE","/jobs/"+enc(id)); if(parseHash().id){ location.hash="#/jobs"; return; } }
+  render();
+}
+
+document.getElementById("view").addEventListener("click", (e)=>{
+  const a = e.target.closest("[data-act]");
+  if(a){ e.stopPropagation(); doAction(a.dataset.act, a.dataset.id); return; }
+  const row = e.target.closest("[data-job]");
+  if(row){ location.hash = "#/jobs/"+enc(row.dataset.job); }
+});
+document.getElementById("replay").addEventListener("click", async ()=>{ await api("POST","/replay"); render(); });
+
+let timer = null;
+function scheduleRender(){ if(timer) return; timer = setTimeout(()=>{ timer=null; render(); }, 400); }
+window.addEventListener("hashchange", render);
+
+(function connect(){
+  const es = new EventSource(apiURL("/stream"));
+  const dot = document.getElementById("live");
+  es.onopen = ()=> dot.classList.add("live");
+  es.onerror = ()=> dot.classList.remove("live");
+  es.onmessage = ()=> scheduleRender();
+})();
+
+render();
+</script>
+</body>
+</html>

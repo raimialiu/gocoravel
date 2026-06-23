@@ -2,7 +2,10 @@ package coravel
 
 import (
 	"context"
+	"log"
+	"net/http"
 
+	"github.com/raimialiu/gocoravel/internals/pkg/dashboard"
 	"github.com/raimialiu/gocoravel/internals/pkg/scheduler"
 	"github.com/raimialiu/gocoravel/internals/pkg/store"
 	"github.com/raimialiu/gocoravel/internals/pkg/store/providers"
@@ -80,6 +83,9 @@ func (c *Coravel) Scheduler() *scheduler.Scheduler {
 
 func (c *Coravel) Stop() {
 	c._scheduler.CancelTasks()
+	if c._dashboard != nil {
+		_ = c._dashboard.Close()
+	}
 }
 
 func (c *Coravel) UseScheduler(configs ...CoravelConfig) {
@@ -98,4 +104,45 @@ func (c *Coravel) Replay() error {
 		return nil
 	}
 	return c._scheduler.Replay()
+}
+
+// Dashboard returns a mountable http.Handler serving the scheduler dashboard
+// (UI + JSON API + live SSE) under opts.BasePath. Mount it on your own server:
+//
+//	mux.Handle("/coravel/", c.Dashboard(dashboard.Options{BasePath: "/coravel"}))
+func (c *Coravel) Dashboard(opts dashboard.Options) http.Handler {
+	return dashboard.Handler(&c._scheduler, opts)
+}
+
+// StartDashboard runs the dashboard on its own HTTP server at addr (blocking).
+// Prefer AddDashboard for the managed, chainable form.
+func (c *Coravel) StartDashboard(addr string, opts dashboard.Options) error {
+	return http.ListenAndServe(addr, c.Dashboard(opts))
+}
+
+// AddDashboard starts the dashboard on its own HTTP server (in the background)
+// and returns the Coravel for chaining. Call it after AddScheduler. The server
+// is shut down by Stop, and a startup error is delivered to the OnError handler
+// (or logged if none is set).
+//
+//	coravel.NewCoravel().AddScheduler().
+//	    AddDashboard(dashboard.Options{Addr: ":8099", BasePath: "/coravel"})
+func (c *Coravel) AddDashboard(opts dashboard.Options) *Coravel {
+	addr := opts.Addr
+	if addr == "" {
+		addr = ":8099"
+	}
+	srv := &http.Server{Addr: addr, Handler: c.Dashboard(opts)}
+	c._dashboard = srv
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if c._errorHandler != nil {
+				c._errorHandler(err)
+			} else {
+				log.Printf("coravel: dashboard: %v", err)
+			}
+		}
+	}()
+	return c
 }

@@ -2,6 +2,7 @@ package coravel
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/raimialiu/gocoravel/internals/pkg/scheduler"
 	"github.com/raimialiu/gocoravel/internals/pkg/store"
@@ -15,5 +16,6 @@ type (
 		_dataStore          *store.CoravelStore
 		_persistenceEnabled bool
 		_errorHandler       func(error)
+		_dashboard          *http.Server
 	}
 )

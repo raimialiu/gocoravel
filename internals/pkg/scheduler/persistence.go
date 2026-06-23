@@ -303,22 +303,26 @@ func (s *Scheduler) execute(job *ScheduleEvent, t time.Time) {
 
 	job.markAsExecuteOnce()
 
-	if s._store != nil && job.ShouldPersist() {
-		run := JobRun{
-			Id:           fmt.Sprintf("%s:%d", job._uniqueId, started.UnixNano()),
-			JobId:        job.OverlappingUniqueIdentifier(),
-			ScheduledFor: t,
-			StartedAt:    started,
-			FinishedAt:   finished,
-			Status:       RunSucceeded,
-		}
-		if err != nil {
-			run.Status = RunFailed
-			run.Err = err.Error()
-		}
-		s.persistRun(run)
-	} else if err != nil {
+	run := JobRun{
+		Id:           fmt.Sprintf("%s:%d", job._uniqueId, started.UnixNano()),
+		JobId:        job.OverlappingUniqueIdentifier(),
+		ScheduledFor: t,
+		StartedAt:    started,
+		FinishedAt:   finished,
+		Status:       RunSucceeded,
+	}
+	if err != nil {
+		run.Status = RunFailed
+		run.Err = err.Error()
 		s.reportError(err)
+	}
+
+	// Always record to the in-memory feed (dashboard), persist only if opted in.
+	if s._feed != nil {
+		s._feed.record(run)
+	}
+	if s._store != nil && job.ShouldPersist() {
+		s.persistRun(run)
 	}
 
 	job.unscheduleIfWarranted()
@@ -456,11 +460,14 @@ func (e *ScheduleEvent) missedOccurrences(sched JobSchedule, last, now time.Time
 }
 
 func (s *Scheduler) lookup(id string) *ScheduleEvent {
-	ref := s._tasks.Get(id)
-	if ref == nil {
-		return nil
+	// Scan by unique id rather than map key: an unnamed/late-named job may be
+	// keyed under its provisional auto id, so Get(id) would miss it.
+	for _, job := range s._tasks.ToMap() {
+		if job != nil && job.OverlappingUniqueIdentifier() == id {
+			return job
+		}
 	}
-	return *ref
+	return nil
 }
 
 func (s *Scheduler) scheduleFromState(invocable IInvocable, sched JobSchedule) *ScheduleEvent {
