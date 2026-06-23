@@ -1,0 +1,17 @@
+# Binaries & build output
+*.exe
+*.test
+*.out
+/coravelapp
+/gocoravel
+bin/
+dist/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
